@@ -1,0 +1,8 @@
+fastapi
+uvicorn
+gitpython
+scikit-learn
+pandas
+docker
+joblib
+api
