@@ -1,0 +1,54 @@
+{
+    "model": "XGBoost",
+    "accuracy": 0.9666666666666667,
+    "report": {
+        "flask": {
+            "precision": 1.0,
+            "recall": 0.8888888888888888,
+            "f1-score": 0.9411764705882353,
+            "support": 9.0
+        },
+        "laravel": {
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1-score": 1.0,
+            "support": 11.0
+        },
+        "springboot": {
+            "precision": 0.9090909090909091,
+            "recall": 1.0,
+            "f1-score": 0.9523809523809523,
+            "support": 10.0
+        },
+        "accuracy": 0.9666666666666667,
+        "macro avg": {
+            "precision": 0.9696969696969697,
+            "recall": 0.9629629629629629,
+            "f1-score": 0.9645191409897292,
+            "support": 30.0
+        },
+        "weighted avg": {
+            "precision": 0.9696969696969696,
+            "recall": 0.9666666666666667,
+            "f1-score": 0.9664799253034547,
+            "support": 30.0
+        }
+    },
+    "confusion_matrix": [
+        [
+            8,
+            0,
+            1
+        ],
+        [
+            0,
+            11,
+            0
+        ],
+        [
+            0,
+            0,
+            10
+        ]
+    ]
+}
