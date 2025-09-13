@@ -1,0 +1,26 @@
+// For format details, see https://aka.ms/devcontainer.json
+// For config options, see the README at:
+// https://github.com/devcontainers/templates/tree/main/src/python
+{
+  "name": "Framework Detection DevContainer",
+  // Construire à partir d’un Dockerfile personnalisé
+  "build": {
+    "dockerfile": "Dockerfile"
+  },
+
+  // Extensions utiles pour VS Code
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-python.python",
+        "ms-python.vscode-pylance"
+      ]
+    }
+  },
+
+  // Commande exécutée après création du conteneur
+  "postCreateCommand": "pip install -r requirements.txt",
+
+  // Utilisateur par défaut
+  "remoteUser": "vscode"
+}
