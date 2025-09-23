@@ -3,9 +3,6 @@ import json
 from pathlib import Path
 from collections import Counter
 from transformers import pipeline, AutoTokenizer, AutoModelForSeq2SeqLM, AutoModelForCausalLM
-import torch
-from huggingface_hub import login
-from huggingface_hub import InferenceClient
 import subprocess
 import uuid
 from openai import OpenAI
@@ -29,19 +26,61 @@ def clone_repo(github_url: str, base_dest="cloned_repos") -> str:
 
     return dest
 
+# Files that usually list installed modules / dependencies
+DEPENDENCY_FILES = {
+    "requirements.txt",    # Python
+    "pyproject.toml",      # Python (Poetry)
+    "Pipfile",             # Python (Pipenv)
+    "package.json",        # Node.js
+    "composer.json",       # PHP
+    "pom.xml",             # Java Maven
+    "build.gradle",        # Java Gradle
+    "build.gradle.kts",    # Kotlin Gradle
+    "Gemfile",             # Ruby
+    "environment.yml",     # Conda
+}
+
+def collect_dependency_files(repo_path: str, max_files=50):
+    """Collect only dependency/manifest files from the repo."""
+    p = Path(repo_path)
+    files = []
+    for f in p.rglob("*"):
+        if f.is_file() and f.name in DEPENDENCY_FILES:
+            files.append(f)
+            if len(files) >= max_files:
+                break
+    return files
+
+
+def read_dependency_snippets(files, max_chars_per_file=4000):
+    """Read content of dependency files, trimmed if too long."""
+    snippets = {}
+    for f in files:
+        try:
+            txt = f.read_text(errors="ignore")
+            # Trim large files: head + tail
+            if len(txt) > max_chars_per_file:
+                txt = txt[:max_chars_per_file//2] + "\n\n/*...*/\n\n" + txt[-max_chars_per_file//2:]
+            snippets[str(f)] = txt
+        except Exception:
+            snippets[str(f)] = ""
+    return snippets
+
+
 #  Fonction de génération de Dockerfile
-def generate_dockerfile_with_mistralai(framework: str) -> str:
+def generate_dockerfile_with_mistralai(framework: str,snippets:dict) -> str:
+    content = "\n".join(list(snippets.values())[:5])[:3000]
     """
     Génère un Dockerfile via Hugging Face API (modèle chat comme Mistral/mistralai-2-Chat)
     """
     messages = [
         {"role": "system", "content": "You are a helpful assistant that generates production-ready Dockerfiles."},
         {"role": "user", "content": f"""
-Task: Generate a clean, optimized Dockerfile for a {framework} web application.
+Task: Generate a clean, optimized Dockerfile for a {framework} web application based on this {content}
 Make sure it:
 - Uses a slim base image
 - Installs dependencies efficiently
-- Exposes the correct port
+- Exposes the correct port 
 - Uses CMD to run the app in production
 
 Output only the Dockerfile content without explanations or extra text.
@@ -67,45 +106,32 @@ Output only the Dockerfile content without explanations or extra text.
     return "\n".join(dockerfile_clean)
                   
 
-#  Helpers pour scanner repo 
-TEXT_FILE_EXTS = {
-    ".py", ".ts", ".java", ".go", ".rs", ".php", ".rb", ".jsx", ".tsx", ".cs", ".cpp", ".c", ".xml", ".json"
-}
 
-FRAME_KEYWORDS = {
-    "django": ["manage.py", "django", "settings.py", "wsgi.py"],
-    "flask": ["flask", "app.py", "wsgi.py", "requirements.txt"],
-    "fastapi": ["fastapi", "uvicorn", "main.py", "app.py"],
-    "springboot": ["pom.xml", "spring-boot", "Application.java"],
-    "laravel": ["artisan", "composer.json", "laravel"],
-}
+# def collect_files(repo_path: str, max_files=200):
+#     p = Path(repo_path)
+#     files = []
+#     for f in p.rglob("*"):
+#         if f.is_file() and (f.suffix in TEXT_FILE_EXTS or f.name in {"package.json", "requirements.txt", "pyproject.toml", "pom.xml", "composer.json"}):
+#             files.append(f)
+#             if len(files) >= max_files:
+#                 break
+#     return files
 
 
-def collect_files(repo_path: str, max_files=200):
-    p = Path(repo_path)
-    files = []
-    for f in p.rglob("*"):
-        if f.is_file() and (f.suffix in TEXT_FILE_EXTS or f.name in {"package.json", "requirements.txt", "pyproject.toml", "pom.xml", "composer.json"}):
-            files.append(f)
-            if len(files) >= max_files:
-                break
-    return files
+# def read_snippets(files, max_chars_per_file=4000, sample_lines=200):
+#     snippets = {}
+#     for f in files:
+#         try:
+#             txt = f.read_text(errors="ignore")
+#             # shrink to a representative sample: head + tail
+#             if len(txt) > max_chars_per_file:
+#                 txt = txt[:max_chars_per_file//2] + "\n\n/*...*/\n\n" + txt[-max_chars_per_file//2:]
+#             snippets[str(f)] = txt
+#         except Exception as e:
+#             snippets[str(f)] = ""
+#     return snippets
 
-
-def read_snippets(files, max_chars_per_file=4000, sample_lines=200):
-    snippets = {}
-    for f in files:
-        try:
-            txt = f.read_text(errors="ignore")
-            # shrink to a representative sample: head + tail
-            if len(txt) > max_chars_per_file:
-                txt = txt[:max_chars_per_file//2] + "\n\n/*...*/\n\n" + txt[-max_chars_per_file//2:]
-            snippets[str(f)] = txt
-        except Exception as e:
-            snippets[str(f)] = ""
-    return snippets
-
-#  Fonction de detection de langage de programmation backend
+#  Fonction de detection de langage de programmation backend 
 # def detect_language_with_mistralai(snippets: dict) -> str:
 #     content = "\n".join(list(snippets.values())[:5])[:2000]
 
@@ -137,10 +163,10 @@ def run_pipeline_from_github(github_url: str, out_path="Generated.Dockerfile"):
     repo_path = clone_repo(github_url)
 
     print(f"[+] Collecting files from {repo_path}")
-    files = collect_files(repo_path)
+    files = collect_dependency_files(repo_path)
     print(f"[+] Collected {len(files)} files")
 
-    snippets = read_snippets(files)
+    snippets = read_dependency_snippets(files)
 
     # print("[+] Detecting language...")
     # language = detect_language_with_mistralai(snippets)
@@ -151,7 +177,7 @@ def run_pipeline_from_github(github_url: str, out_path="Generated.Dockerfile"):
     print(f"    -> {framework}")
 
     print("[+] Generating Dockerfile...")
-    dockerfile = generate_dockerfile_with_mistralai(framework)
+    dockerfile = generate_dockerfile_with_mistralai(framework,snippets)
 
     out_path = os.path.join(repo_path, "Dockerfile")
     with open(out_path, "w", encoding="utf-8") as f:
